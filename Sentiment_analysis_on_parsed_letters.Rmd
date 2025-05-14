@@ -1,0 +1,167 @@
+---
+title: "Sentiment_analysis on parsed letters"
+author: "Theresa Plougstrup"
+date: "2025-05-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library("tidyverse")
+library("ggwordcloud")
+library("textdata")
+library("tidytext")
+library("lubridate")
+library("here")
+```
+
+
+```{r}
+letters_df <- letters_parsed %>% 
+  mutate(text_lines = str_split(content, pattern = '\n')) %>% 
+  unnest(text_lines) %>% 
+  mutate(text_lines = str_replace_all(text_lines, "’", "'"),
+         text_lines = str_trim(str_to_lower(text_lines)))
+```
+
+```{r}
+letters_tokens <- letters_df %>% 
+  unnest_tokens(word, text_lines)
+```
+
+```{r}
+stop_words <- stop_words %>%
+  mutate(
+    word = str_replace_all(word, "’", "'"),
+    word = str_trim(str_to_lower(word))
+  )
+```
+
+```{r}
+letters_stop <- letters_tokens %>% 
+  anti_join(stop_words, by = "word")
+```
+
+```{r}
+letters_no_numeric <- letters_stop %>% 
+  filter(is.na(as.numeric(word)))
+```
+```{r}
+letters_top100 <- letters_no_numeric %>% 
+  count(word) %>% 
+  arrange(desc(n)) %>% 
+  slice_head(n = 100)
+letters_top100
+```
+```{r}
+view(letters_top100)
+```
+
+
+```{r}
+#Filter letters from June 1889 where Starry Night was painted
+
+letters_df <- letters_df %>%
+  mutate(
+    date_first = str_extract(date, "\\b\\w+,\\s*\\d{1,2}\\s+\\w+\\s+\\d{4}\\b"),
+    date_parsed = dmy(str_remove(date_first, "^\\w+,\\s*"))
+  )
+
+```
+
+```{r}
+letters_june_1889 <- letters_df %>%
+  filter(!is.na(date_parsed),
+         year(date_parsed) == 1889,
+         month(date_parsed) == 6) 
+```
+
+```{r}
+get_sentiments(lexicon = "afinn")
+get_sentiments(lexicon = "nrc")
+```
+```{r}
+june_tokens <- letters_june_1889 %>%
+  unnest_tokens(word, text_lines)
+```
+
+```{r}
+letters_1889_afinn <- june_tokens %>% 
+  inner_join(get_sentiments("afinn"), by = "word")
+
+letters_1889_afinn
+```
+```{r}
+letters_afinn_hist <- letters_1889_afinn %>% 
+  count(value)
+
+ggplot(data = letters_afinn_hist, aes(x = value, y = n)) +
+  geom_col(aes(fill = value)) +
+  theme_bw()
+```
+```{r}
+letters_1889_afinn %>%
+  summarise(
+    mean_score = mean(value),
+    median_score = median(value))
+```
+```{r}
+letters_1889_afinn2 <- letters_1889_afinn %>% 
+  filter(value == 2)
+
+letters_1889_afinn2
+```
+```{r}
+letters_1889_nrc <- june_tokens %>% 
+  inner_join(get_sentiments("nrc"), by = "word")
+
+letters_1889_nrc
+
+```
+
+```{r}
+letters_exclude <- june_tokens %>% 
+  anti_join(get_sentiments("nrc"))
+
+letters_exclude
+```
+```{r}
+letters_exclude_n <- letters_exclude %>% 
+  count(word, sort = TRUE)
+
+head(letters_exclude_n)
+
+```
+```{r}
+letters_1889_nrc_n <- letters_1889_nrc %>% 
+  count(sentiment, sort = TRUE)
+
+ggplot(data = letters_1889_nrc_n, aes(x = sentiment, y = n)) +
+  geom_col(aes(fill = sentiment))+
+  theme_bw()
+```
+
+```{r fig.width=20}
+letters_1889_nrc_n5 <- letters_1889_nrc %>%  
+  count(word,sentiment, sort = TRUE) %>% 
+  group_by(sentiment) %>% 
+  top_n(7) %>% 
+  ungroup()
+
+letters_1889_nrc_gg <- ggplot(data = letters_1889_nrc_n5, aes(x = reorder(word,n), y = n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, ncol = 2, scales = "free") +
+  coord_flip() +
+  theme_minimal() +
+  labs(x = "Word", y = "count")
+
+letters_1889_nrc_gg
+```
+```{r}
+ggsave(plot = letters_1889_nrc_gg, 
+       here("figures","letters_1889_nrc_sentiment.png"), 
+       height = 10, 
+       width = 7)

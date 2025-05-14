@@ -1,0 +1,76 @@
+---
+title: "Parsing XML Vincent van Gogh letters"
+author: "Theresa Plougstrup"
+date: "2025-05-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Parsing xml letters
+
+```{r}
+library(tidyverse)
+library(xml2)
+library(dplyr)
+```
+```{r}
+
+letters <- tibble(file = list.files("data/Letters", pattern = "let", full.names = TRUE))
+
+```
+
+```{r}
+letters <- letters %>% 
+  rowwise() %>% 
+  mutate(xml = list(read_xml(file))) %>% 
+  ungroup()
+```
+#For one file
+
+```{r}
+etBrev <- read_xml("data/Letters/let001.xml")
+```
+
+```{r}
+etBrev %>%
+   xml_find_all("/d1:TEI/d1:teiHeader/d1:fileDesc/d1:sourceDesc/vg:letDesc/vg:letHeading/vg:addressee") %>% 
+          xml_text()
+  
+```
+
+#For all 903 files
+
+I start by opening one of the letter xml files in the program: Visual Studio Code. Here I follow the structure of one of the XML files and write down the path to e.g. the translated, english content of the letter to create a column containing that information.This way the content of all the xml files with letters - as they all have the same structure (which can be tested by seeing if all 903 letters in this case are regisered in the environment window) and the letters are thus usable in Rstudio and I can analyse them further.
+
+For the following analysis I will be doing with these files, I decided to parsing the title of the letter, the English content, the author and the recipient of a letter and the date and place where it was sent from. It is, of course, possible to extract other information from the letters if needed. 
+
+```{r}
+#Parsing all xml files
+
+letters_parsed <- letters %>% 
+  rowwise() %>% 
+  mutate(title = xml %>% 
+           xml_find_all("/d1:TEI/d1:teiHeader/d1:fileDesc/d1:titleStmt/d1:title") %>% 
+           xml_text(),
+         content = xml %>% 
+           xml_find_all('/d1:TEI/d1:text/d1:body/d1:div[@type = "translation"]') %>% 
+           xml_text(),
+        author = xml %>% 
+           xml_find_all("/d1:TEI/d1:teiHeader/d1:fileDesc/d1:sourceDesc/vg:letDesc/vg:letHeading/d1:author") %>% 
+           xml_text(), 
+        recipient = xml %>% 
+          xml_find_all("/d1:TEI/d1:teiHeader/d1:fileDesc/d1:sourceDesc/vg:letDesc/vg:letHeading/vg:addressee") %>% 
+          xml_text(),
+        date = xml %>% 
+          xml_find_all("/d1:TEI/d1:teiHeader/d1:fileDesc/d1:sourceDesc/vg:letDesc/vg:letHeading/vg:dateLet") %>% 
+          xml_text(), 
+        place = xml %>% 
+          xml_find_all("/d1:TEI/d1:teiHeader/d1:fileDesc/d1:sourceDesc/vg:letDesc/vg:letHeading/vg:placeLet") %>% 
+          xml_text())
+```
+
+
+
